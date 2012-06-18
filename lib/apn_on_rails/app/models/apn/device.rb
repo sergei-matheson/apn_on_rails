@@ -15,9 +15,14 @@ class APN::Device < APN::Base
   has_many :unsent_notifications, :class_name => 'APN::Notification', :conditions => 'sent_at is null'
   
   validates_uniqueness_of :token, :scope => :app_id
-  validates_format_of :token, :with => /^[a-z0-9]{8}\s[a-z0-9]{8}\s[a-z0-9]{8}\s[a-z0-9]{8}\s[a-z0-9]{8}\s[a-z0-9]{8}\s[a-z0-9]{8}\s[a-z0-9]{8}$/
+  validates_format_of :token, :with => /^[a-z0-9]{8}\s?[a-z0-9]{8}\s?[a-z0-9]{8}\s?[a-z0-9]{8}\s?[a-z0-9]{8}\s?[a-z0-9]{8}\s?[a-z0-9]{8}\s?[a-z0-9]{8}$/
   
   before_create :set_last_registered_at
+
+  # scope by token, in normalized form
+  scope :by_token, lambda { |token|
+    where(:token => APN::Device.normalize_token(token))
+  }
   
   # The <tt>feedback_at</tt> accessor is set when the 
   # device is marked as potentially disconnected from your
@@ -25,16 +30,25 @@ class APN::Device < APN::Base
   attr_accessor :feedback_at
   
   # Stores the token (Apple's device ID) of the iPhone (device).
+  # Uses normalize_token to create a consistent token.
+  def token=(token)
+    write_attribute('token', self.class.normalize_token(token))
+  end
+
+  # Normalizes the token (Apple's device ID) of the iPhone (device).
   # 
   # If the token comes in like this:
   #  '<5gxadhy6 6zmtxfl6 5zpbcxmw ez3w7ksf qscpr55t trknkzap 7yyt45sc g6jrw7qz>'
-  # Then the '<' and '>' will be stripped off.
-  def token=(token)
-    res = token.scan(/\<(.+)\>/).first
-    unless res.nil? || res.empty?
-      token = res.first
+  # Then the '<' and '>', as well as any spaces,  will be stripped off.
+  def self.normalize_token(token) 
+    if token
+      res = token.scan(/\<(.+)\>/).first
+      unless res.nil? || res.empty?
+        token = res.first
+      end
+      token.gsub!(/\s+/, '')
     end
-    write_attribute('token', token)
+    token
   end
   
   # Returns the hexadecimal representation of the device's token.
